@@ -1,0 +1,30 @@
+datasources:
+  postgres:
+    url: jdbc:postgresql://kestra-postgres:5432/kestra
+    driver-class-name: org.postgresql.Driver
+    # Devono corrispondere al servizio kestra-postgres in compose.yaml.
+    username: CHANGE_ME
+    password: CHANGE_ME
+
+kestra:
+  server:
+    basic-auth:
+      username: "CHANGE_ME@example.com"
+      password: "CHANGE_ME"
+  plugins:
+    configurations:
+      - type: io.kestra.plugin.fs.local.Download
+        values:
+          allowed-paths:
+            - /app/lanefactor-data
+      - type: io.kestra.plugin.scripts.runner.docker.Docker
+        values:
+          volume-enabled: true
+  repository:
+    type: postgres
+  queue:
+    type: postgres
+  storage:
+    type: local
+    local:
+      base-path: /app/storage

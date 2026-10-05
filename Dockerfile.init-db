@@ -1,0 +1,16 @@
+FROM python:3.12
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+WORKDIR /app
+
+COPY uv.lock .python-version pyproject.toml ./
+
+RUN uv sync --locked --no-install-project
+
+COPY ./scripts/db-init/ ./scripts/db-init/
+
+ENTRYPOINT ["sh", "-c", \
+"python ./scripts/db-init/init_db_postgres.py && python ./scripts/db-init/init_metrics_db_postgres.py"]

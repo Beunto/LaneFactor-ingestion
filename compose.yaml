@@ -1,0 +1,198 @@
+services:
+
+  postgres:
+    image: postgres:18
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - lanefactor-postgres-data:/var/lib/postgresql
+    env_file: .env.db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    volumes:
+      - lanefactor-cloudbeaver-config:/opt/cloudbeaver/workspace
+    ports:
+      - 127.0.0.1:8978:8978
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  kestra-postgres:
+    image: postgres:18
+    volumes:
+      - lanefactor-kestra-postgres-data:/var/lib/postgresql
+    env_file:
+      - .env.kestra
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  kestra:
+    image: kestra/kestra:latest-slim
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - lanefactor-kestra-storage:/app/storage
+      - ./data:/app/lanefactor-data:ro
+      - ./kestra-config.yaml:/etc/config/kestra-config.yaml:ro
+    ports:
+      - 127.0.0.1:8080:8080
+    command:
+      - server
+      - standalone
+      - --config
+      - /etc/config/kestra-config.yaml
+    depends_on:
+      kestra-postgres:
+        condition: service_healthy
+
+  init-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.init-db
+    env_file: .env.db
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  match_sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.match_sync
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+  match_detail_sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.match_detail_sync
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+  match_timeline_sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.match_timeline_sync
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+  ingest_player_game:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.ingest_player_game
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+  update_seed:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.update_seed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+  snowball:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    profiles:
+      - manual
+    env_file:
+      - .env.riot
+      - .env.db
+    entrypoint:
+      - uv
+      - run
+      - --module
+      - scripts.ingestion.snowball
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+volumes:
+  lanefactor-postgres-data:
+    name: lanefactor-postgres-data
+    external: True
+  lanefactor-cloudbeaver-config:
+    name: lanefactor-cloudbeaver-config
+    external: True
+  lanefactor-kestra-storage:
+    name: lanefactor-kestra-storage
+    external: True
+  lanefactor-kestra-postgres-data:
+    name: lanefactor-kestra-postgres-data
+    external: True
